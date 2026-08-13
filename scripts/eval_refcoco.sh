@@ -36,5 +36,5 @@ $CONDA_PYTHON "$PROJECT_ROOT/scripts/refcoco_inference.py" \
     --model-path "$MODEL_PATH" \
     --model-name "$MODEL_NAME" \
     --data-dir "$DATA_DIR" \
-    --pruning-method "${PRUNING_METHOD:-random}" \
-    --keep-ratio "${KEEP_RATIO:-0.75}"
+    --pruning-method "${PRUNING_METHOD:-uniform}" \
+    --keep-ratio "${KEEP_RATIO:-0.125}"

@@ -144,7 +144,7 @@ class LlavaMetaForCausalLM(ABC):
 
     def prepare_inputs_labels_for_multimodal(
         self, input_ids, position_ids, attention_mask, past_key_values, labels,
-        images, image_sizes=None, keep_ratio=1.0
+        images, image_sizes=None, keep_ratio=1.0, pruning_method=None
     ):
         vision_tower = self.get_vision_tower()
         if vision_tower is None or images is None or input_ids.shape[1] == 1:
@@ -260,12 +260,19 @@ class LlavaMetaForCausalLM(ABC):
                     cur_image_features = image_features[cur_image_idx]
                     cur_image_idx += 1
 
-                    # random token pruning
-                    num_visual_tokens = cur_image_features.shape[0]
-                    num_keep = max(1, int(num_visual_tokens * keep_ratio))
-                    keep_indices = torch.randperm(num_visual_tokens, device=cur_image_features.device)[:num_keep]
-                    keep_indices = keep_indices.sort().values  # sort to maintain order
-                    cur_image_features = cur_image_features[keep_indices]
+                    if pruning_method == 'random':
+                        # random token pruning
+                        num_visual_tokens = cur_image_features.shape[0]
+                        num_keep = max(1, int(num_visual_tokens * keep_ratio))
+                        keep_indices = torch.randperm(num_visual_tokens, device=cur_image_features.device)[:num_keep]
+                        keep_indices = keep_indices.sort().values  # sort to maintain order
+                        cur_image_features = cur_image_features[keep_indices]
+                    elif pruning_method == 'uniform':
+                        # uniform token pruning
+                        num_visual_tokens = cur_image_features.shape[0]
+                        num_keep = max(1, int(num_visual_tokens * keep_ratio))
+                        keep_indices = torch.linspace(0, num_visual_tokens - 1, steps=num_keep, dtype=torch.long, device=cur_image_features.device)
+                        cur_image_features = cur_image_features[keep_indices]
 
                     cur_new_input_embeds.append(cur_image_features)
                     cur_new_labels.append(torch.full((cur_image_features.shape[0],), IGNORE_INDEX, device=cur_labels.device, dtype=cur_labels.dtype))

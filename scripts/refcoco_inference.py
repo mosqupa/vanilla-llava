@@ -136,6 +136,7 @@ def main():
                     temperature=args.temperature,
                     max_new_tokens=args.max_new_tokens,
                     use_cache=True,
+                    pruning_method=args.pruning_method,
                     keep_ratio=args.keep_ratio,
                 )
 
