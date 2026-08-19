@@ -75,12 +75,15 @@ def main():
     parser.add_argument("--model-name", default="llava-v1.5-7b")
     parser.add_argument("--pruning-method", default="random", choices=["random", "uniform"], help="Method for visual token pruning")
     parser.add_argument("--keep-ratio", type=float, default=1.0, help="Ratio of visual tokens to keep (0.0 to 1.0)")
+    parser.add_argument("--use-2d-pe", action="store_true", help="Use 2D positional embeddings for images.")
+    parser.add_argument("--pe-scale", type=float, default=1.0, help="Scale for 2D positional embeddings.")
     args = parser.parse_args()
 
     data_dir = Path(args.data_dir)
     question_file = data_dir / "converted" / f"{args.split}.jsonl"
     image_dir = data_dir / "images"
-    answer_dir = data_dir / "answers" / args.split / args.model_name / f"{args.pruning_method}_{args.keep_ratio}"
+    pe_tag = f"2dpe_{args.pe_scale}" if args.use_2d_pe else "no2dpe"
+    answer_dir = data_dir / "answers" / args.split / args.model_name / f"{args.pruning_method}_{args.keep_ratio}_{pe_tag}"
     answer_dir.mkdir(parents=True, exist_ok=True)
     answer_file = answer_dir / "merge.jsonl"
     metrics_file = answer_dir / "metrics.txt"
@@ -138,6 +141,8 @@ def main():
                     use_cache=True,
                     pruning_method=args.pruning_method,
                     keep_ratio=args.keep_ratio,
+                    use_2d_pe=args.use_2d_pe,
+                    pe_scale=args.pe_scale,
                 )
 
             text = tokenizer.batch_decode(output_ids, skip_special_tokens=True)[0].strip()
@@ -193,7 +198,7 @@ def main():
     for t in iou_thresholds:
         lines.append(f"  Acc@IoU={t:.1f}:  {correct[t]:5d}/{total:5d}  ({100.0*correct[t]/total:.2f}%)")
     lines.append("")
-    lines.append("Accuracy@IoU (failures → wrong):")
+    lines.append(f"Accuracy@IoU (keep ratio={args.keep_ratio * 100:.1f}%):")
     for t in iou_thresholds:
         lines.append(f"  Acc@IoU={t:.1f}:  {correct[t]:5d}/{total:5d}  ({100.0*correct[t]/total:.2f}%)")
 

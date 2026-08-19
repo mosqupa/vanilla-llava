@@ -1,11 +1,4 @@
 #!/bin/bash
-# RefCOCO evaluation pipeline — fast version.
-# One image encoded once, all questions share it.
-#
-# Usage:
-#   bash scripts/run_refcoco_eval.sh                    # val split
-#   SPLIT=refcoco_test_questions bash scripts/run_refcoco_eval.sh
-#   SPLIT=refcoco_testB_questions bash scripts/run_refcoco_eval.sh
 
 set -e
 export HF_HUB_OFFLINE=1
@@ -18,6 +11,10 @@ SPLIT="${SPLIT:-refcoco_val_questions}"
 MODEL_PATH="${MODEL_PATH:-$PROJECT_ROOT/models/llava-v1.5-7b}"
 MODEL_NAME="${MODEL_NAME:-llava-v1.5-7b}"
 DATA_DIR="$PROJECT_ROOT/data/refcoco"
+PE_FLAG=""
+if [ "${USE_2D_PE:-true}" = "true" ] || [ "${USE_2D_PE:-true}" = "1" ]; then
+    PE_FLAG="--use-2d-pe"
+fi
 
 echo "========================================="
 echo "  RefCOCO — $SPLIT"
@@ -36,5 +33,7 @@ $CONDA_PYTHON "$PROJECT_ROOT/scripts/refcoco_inference.py" \
     --model-path "$MODEL_PATH" \
     --model-name "$MODEL_NAME" \
     --data-dir "$DATA_DIR" \
-    --pruning-method "${PRUNING_METHOD:-uniform}" \
-    --keep-ratio "${KEEP_RATIO:-0.125}"
+    --pruning-method "${PRUNING_METHOD:-random}" \
+    --keep-ratio "${KEEP_RATIO:-0.125}" \
+    $PE_FLAG \
+    --pe-scale "${PE_SCALE:-1.0}" \

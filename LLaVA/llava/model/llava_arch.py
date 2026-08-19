@@ -24,7 +24,7 @@ from .multimodal_projector.builder import build_vision_projector
 from llava.constants import IGNORE_INDEX, IMAGE_TOKEN_INDEX, DEFAULT_IMAGE_PATCH_TOKEN, DEFAULT_IM_START_TOKEN, DEFAULT_IM_END_TOKEN
 
 from llava.mm_utils import get_anyres_image_grid_shape
-
+from llava.model.pos_embed import get_2d_sincos_pos_embed
 
 class LlavaMetaModel:
 
@@ -137,14 +137,21 @@ class LlavaMetaForCausalLM(ABC):
     def get_vision_tower(self):
         return self.get_model().get_vision_tower()
 
-    def encode_images(self, images):
+    def encode_images(self, images, use_2d_pe=True, pe_scale=1.0):
         image_features = self.get_model().get_vision_tower()(images)
         image_features = self.get_model().mm_projector(image_features)
+        if use_2d_pe:
+            grid_size = self.get_vision_tower().num_patches_per_side
+            embed_dim = image_features.shape[-1]
+            pos_embed = get_2d_sincos_pos_embed(embed_dim, grid_size).to(image_features.device, dtype=image_features.dtype)
+            pos_embed = pos_embed - pos_embed.mean(dim=0, keepdim=True)  # Center the positional embeddings
+            pos_embed = pos_embed * pe_scale
+            image_features = image_features + pos_embed.unsqueeze(0)
         return image_features
 
     def prepare_inputs_labels_for_multimodal(
         self, input_ids, position_ids, attention_mask, past_key_values, labels,
-        images, image_sizes=None, keep_ratio=1.0, pruning_method=None
+        images, image_sizes=None, keep_ratio=1.0, pruning_method=None, use_2d_pe=True, pe_scale=1.0
     ):
         vision_tower = self.get_vision_tower()
         if vision_tower is None or images is None or input_ids.shape[1] == 1:
@@ -154,7 +161,7 @@ class LlavaMetaForCausalLM(ABC):
             if type(images) is list:
                 images = [x.unsqueeze(0) if x.ndim == 3 else x for x in images]
             concat_images = torch.cat([image for image in images], dim=0)
-            image_features = self.encode_images(concat_images)
+            image_features = self.encode_images(concat_images, use_2d_pe=use_2d_pe, pe_scale=pe_scale)
             split_sizes = [image.shape[0] for image in images]
             image_features = torch.split(image_features, split_sizes, dim=0)
             mm_patch_merge_type = getattr(self.config, 'mm_patch_merge_type', 'flat')
@@ -199,7 +206,7 @@ class LlavaMetaForCausalLM(ABC):
             else:
                 raise ValueError(f"Unexpected mm_patch_merge_type: {self.config.mm_patch_merge_type}")
         else:
-            image_features = self.encode_images(images)
+            image_features = self.encode_images(images, use_2d_pe=use_2d_pe, pe_scale=pe_scale)
 
         # TODO: image start / end is not implemented here to support pretraining.
         if getattr(self.config, 'tune_mm_mlp_adapter', False) and getattr(self.config, 'mm_use_im_start_end', False):
